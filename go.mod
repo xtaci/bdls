@@ -7,7 +7,7 @@ require (
 	github.com/btcsuite/btcd v0.20.1-beta
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gogo/protobuf v1.3.1
-	github.com/golang/protobuf v1.3.3
+	github.com/golang/protobuf v1.3.3 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/onsi/ginkgo v1.12.0 // indirect

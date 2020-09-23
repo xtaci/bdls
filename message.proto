@@ -44,8 +44,6 @@ message SignedProto {
 	// signature r,s for prefix+messages+version+x+y above
 	bytes r = 5;
 	bytes s = 6;
-	// Auxcilliary Data set by user, and send along the signedproto
-	bytes AuxData = 7;
 }
 
 // MessageType defines supported message types
@@ -64,6 +62,8 @@ enum MessageType{
 	LockRelease = 5;
 	// MessageDecide = <decide> message
 	Decide = 6;
+	// MessageResync= <resync> message
+	Resync = 7;
 }
 
 // Message defines a consensus message

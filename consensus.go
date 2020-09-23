@@ -327,6 +327,9 @@ type Consensus struct {
 
 	// broadcasting messages being sent to myself
 	loopback [][]byte
+
+	// the last message which caused round change
+	lastRoundChangeProof []*SignedProto
 }
 
 // NewConsensus creates a BDLS consensus object to participant in consensus procedure,
@@ -381,27 +384,27 @@ func (c *Consensus) init(config *Config) {
 
 //  calculates roundchangeDuration
 func (c *Consensus) roundchangeDuration(round uint64) time.Duration {
-	return 2 * c.latency * time.Duration(1+round)
+	return 2 * c.latency * (1 << round)
 }
 
 //  calculates collectDuration
 func (c *Consensus) collectDuration(round uint64) time.Duration {
-	return 2 * c.latency * time.Duration(1+round)
+	return 2 * c.latency * (1 << round)
 }
 
 //  calculates lockDuration
 func (c *Consensus) lockDuration(round uint64) time.Duration {
-	return 4 * c.latency * time.Duration(1+round)
+	return 4 * c.latency * (1 << round)
 }
 
 // calculates commitDuration
 func (c *Consensus) commitDuration(round uint64) time.Duration {
-	return 2 * c.latency * time.Duration(1+round)
+	return 2 * c.latency * (1 << round)
 }
 
 // calculates lockReleaseDuration
 func (c *Consensus) lockReleaseDuration(round uint64) time.Duration {
-	return 2 * c.latency * time.Duration(1+round)
+	return 2 * c.latency * (1 << round)
 }
 
 // maximalLocked finds the maximum locked data in this round,
@@ -975,6 +978,21 @@ func (c *Consensus) broadcastDecide() *SignedProto {
 	//log.Println("broadcast:<decide>")
 }
 
+// broadcastResync will broadcast a <resync> message by the leader,
+// from current round with <roundchange> proofs.
+func (c *Consensus) broadcastResync() {
+	if c.lastRoundChangeProof == nil {
+		return
+	}
+
+	var m Message
+	m.Type = MessageType_Resync
+	// we only care about <roundchange> messages in resync
+	m.Proof = c.lastRoundChangeProof
+	c.broadcast(&m)
+	//log.Println("broadcast:<resync>")
+}
+
 // sendCommit will send a <commit> message by participants to the leader
 // from received <lock> message.
 func (c *Consensus) sendCommit(msgLock *Message) {
@@ -1137,11 +1155,12 @@ func (c *Consensus) heightSync(height uint64, round uint64, s State, now time.Ti
 	c.latestRound = round   // set round
 	c.latestState = s       // set state
 
-	c.currentRound = nil // clean current round pointer
-	c.rounds.Init()      // clean all round
-	c.locks = nil        // clean locks
-	c.unconfirmed = nil  // clean all unconfirmed states from previous heights
-	c.switchRound(0)     // start new round at new height
+	c.currentRound = nil         // clean current round pointer
+	c.lastRoundChangeProof = nil // clean round change proof
+	c.rounds.Init()              // clean all round
+	c.locks = nil                // clean locks
+	c.unconfirmed = nil          // clean all unconfirmed states from previous heights
+	c.switchRound(0)             // start new round at new height
 	c.currentRound.Stage = stageRoundChanging
 }
 
@@ -1166,19 +1185,23 @@ func (c *Consensus) Propose(s State) {
 
 // ReceiveMessage processes incoming consensus messages, and returns error
 // if message cannot be processed for some reason.
-func (c *Consensus) ReceiveMessage(bts []byte, now time.Time) error {
+func (c *Consensus) ReceiveMessage(bts []byte, now time.Time) (err error) {
+	// messages broadcasted to myself may be queued recursively, and
+	// we only process these messages in defer to avoid side effects
+	// while processing.
 	defer func() {
-		// broadcasting messages to myself may be queued recursively, and
-		// we only process these messages in defer to avoid side effects
-		// while processing.
 		for len(c.loopback) > 0 {
 			bts := c.loopback[0]
 			c.loopback = c.loopback[1:]
 			// NOTE: message directed to myself ignores error.
-			_ = c.ReceiveMessage(bts, now)
+			_ = c.receiveMessage(bts, now)
 		}
 	}()
 
+	return c.receiveMessage(bts, now)
+}
+
+func (c *Consensus) receiveMessage(bts []byte, now time.Time) error {
 	// unmarshal signed message
 	signed := new(SignedProto)
 	err := proto.Unmarshal(bts, signed)
@@ -1272,6 +1295,9 @@ func (c *Consensus) ReceiveMessage(bts []byte, now time.Time) error {
 			if round.NumRoundChanges() == 2*c.t()+1 && round.Stage < stageLock {
 				// switch to this round
 				c.switchRound(m.Round)
+				// record this round change proof for resyncing
+				c.lastRoundChangeProof = c.currentRound.SignedRoundChanges()
+
 				// If Pj has not broadcasted the round-change message yet,
 				// it broadcasts now.
 				c.broadcastRoundChange()
@@ -1288,6 +1314,7 @@ func (c *Consensus) ReceiveMessage(bts []byte, now time.Time) error {
 				}
 				// set stage
 				c.currentRound.Stage = stageLock
+
 			}
 
 			// for the leader, who's current round has at least 2*t+1 <roundchange>,
@@ -1310,6 +1337,7 @@ func (c *Consensus) ReceiveMessage(bts []byte, now time.Time) error {
 		// round will be increased monotonically
 		if m.Round > c.currentRound.RoundNumber {
 			c.switchRound(m.Round)
+			c.lastRoundChangeProof = []*SignedProto{signed} // record this proof for resyncing
 		}
 
 		// for rounds r' >= r, we must check c.stage to stageLockRelease
@@ -1332,6 +1360,7 @@ func (c *Consensus) ReceiveMessage(bts []byte, now time.Time) error {
 		// round will be increased monotonically
 		if m.Round > c.currentRound.RoundNumber {
 			c.switchRound(m.Round)
+			c.lastRoundChangeProof = []*SignedProto{signed} // record this proof for resyncing
 		}
 
 		// for rounds r' >= r, we must check to enter commit status
@@ -1445,6 +1474,16 @@ func (c *Consensus) ReceiveMessage(bts []byte, now time.Time) error {
 		c.rcTimeout = now.Add(c.roundchangeDuration(0))
 		// we sync our height and broadcast new <roundchange>.
 		c.broadcastRoundChange()
+	case MessageType_Resync:
+		// push the proofs in loopback device
+		for k := range m.Proof {
+			// protobuf marshalling
+			out, err := proto.Marshal(m.Proof[k])
+			if err != nil {
+				panic(err)
+			}
+			c.loopback = append(c.loopback, out)
+		}
 	default:
 		return ErrMessageUnknownMessageType
 	}
@@ -1460,7 +1499,7 @@ func (c *Consensus) Update(now time.Time) error {
 		for len(c.loopback) > 0 {
 			bts := c.loopback[0]
 			c.loopback = c.loopback[1:]
-			_ = c.ReceiveMessage(bts, now)
+			_ = c.receiveMessage(bts, now)
 		}
 	}()
 
@@ -1473,6 +1512,7 @@ func (c *Consensus) Update(now time.Time) error {
 
 		if now.After(c.rcTimeout) {
 			c.broadcastRoundChange()
+			c.broadcastResync() // we also need to broadcast the round change event message if there is any
 			c.rcTimeout = now.Add(c.roundchangeDuration(c.currentRound.RoundNumber))
 		}
 	case stageLock:
