@@ -1,17 +1,17 @@
 [![GoDoc][1]][2] [![License][3]][4] [![Build Status][5]][6] [![Go Report Card][7]][8] [![Coverage Statusd][9]][10] [![Sourcegraph][11]][12]
 
-[1]: https://godoc.org/github.com/Sperax/bdls?status.svg
-[2]: https://godoc.org/github.com/Sperax/bdls
-[3]: https://img.shields.io/github/license/Sperax/bdls
+[1]: https://godoc.org/github.com/xtaci/bdls?status.svg
+[2]: https://godoc.org/github.com/xtaci/bdls
+[3]: https://img.shields.io/github/license/xtaci/bdls
 [4]: LICENSE
-[5]: https://travis-ci.org/Sperax/bdls.svg?branch=master
-[6]: https://travis-ci.org/Sperax/bdls
-[7]: https://goreportcard.com/badge/github.com/Sperax/bdls?bdls
-[8]: https://goreportcard.com/report/github.com/Sperax/bdls
-[9]: https://codecov.io/gh/Sperax/bdls/branch/master/graph/badge.svg
-[10]: https://codecov.io/gh/Sperax/bdls
-[11]: https://sourcegraph.com/github.com/Sperax/bdls/-/badge.svg
-[12]: https://sourcegraph.com/github.com/Sperax/bdls?badge
+[5]: https://travis-ci.org/xtaci/bdls.svg?branch=master
+[6]: https://travis-ci.org/xtaci/bdls
+[7]: https://goreportcard.com/badge/github.com/xtaci/bdls?bdls
+[8]: https://goreportcard.com/report/github.com/xtaci/bdls
+[9]: https://codecov.io/gh/xtaci/bdls/branch/master/graph/badge.svg
+[10]: https://codecov.io/gh/xtaci/bdls
+[11]: https://sourcegraph.com/github.com/xtaci/bdls/-/badge.svg
+[12]: https://sourcegraph.com/github.com/xtaci/bdls?badge
 
 # BDLS Consensus
 
@@ -44,7 +44,7 @@ For more information on the BDLS consensus, you could view here https://medium.c
 
 ## Documentation
 
-For complete documentation, see the associated [Godoc](https://godoc.org/github.com/Sperax/bdls).
+For complete documentation, see the associated [Godoc](https://godoc.org/github.com/xtaci/bdls).
 
 ## Performance
 
